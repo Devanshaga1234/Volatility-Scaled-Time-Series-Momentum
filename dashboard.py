@@ -708,5 +708,5 @@ if __name__ == "__main__":
     results    = run_pipeline()
     ml_results = run_ml_pipeline(results["log_returns"])
     results.update(ml_results)
-    build_dashboard(results, output_path="tsmom_dashboard.html")
-    print("\nOpen tsmom_dashboard.html in your browser to view the dashboard.")
+    build_dashboard(results, output_path="index.html")
+    print("\nOpen index.html in your browser to view the dashboard.")
