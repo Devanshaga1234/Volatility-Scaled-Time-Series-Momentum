@@ -19,13 +19,13 @@ warnings.filterwarnings("ignore")
 # SECTION 1: CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
 
-ASSETS = ["SPY", "QQQ", "GLD", "TLT", "EEM", "IWM"]
+ASSETS = ["SPY", "QQQ", "GLD", "TLT", "EEM", "IWM", "NVDA", "GOOG"]
 START_DATE = "2005-01-01"
 END_DATE = None  # None = today
 
 LOOKBACK_DAYS = 252       # 12-month signal lookback
-VOL_WINDOW = 60           # Rolling realized volatility window (days)
-TARGET_VOL = 0.10         # 10% annualized target volatility
+VOL_WINDOW = 20           # Rolling realized volatility window (days)
+TARGET_VOL = 0.15         # 10% annualized target volatility
 MAX_LEVERAGE = 2.0        # Per-asset leverage cap
 TRADING_DAYS = 252        # Annualization factor
 
