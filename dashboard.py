@@ -19,11 +19,13 @@ from plotly.subplots import make_subplots
 
 from tsmom import run_pipeline, STRESS_PERIODS, ASSETS
 from ml_engine import run_ml_pipeline, ML_MODELS, FEATURE_COLS
+from analyst_data import run_analyst_pipeline, WATCHLIST
 
 # ─────────────────────────────────────────────────────────────────────────────
 # COLOR SCHEME
 # ─────────────────────────────────────────────────────────────────────────────
 
+COLOR_ANALYST  = "#A371F7"              # Purple — Analyst tab accent
 COLOR_UNSCALED = "#4C9BE8"              # Blue  — Unscaled TSMOM
 COLOR_SCALED   = "#F28C28"              # Amber — Vol-Scaled TSMOM
 COLOR_LR       = "#3FB950"              # Green — Logistic Regression
@@ -375,10 +377,450 @@ def build_feature_importance_chart(results: dict) -> go.Figure:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ANALYST TAB — CHART BUILDERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_sentiment_chart(analyst: dict) -> go.Figure:
+    """
+    Horizontal bar chart of ML composite sentiment scores (0-100) per ticker.
+    Color-coded: green (>70), amber (40-70), red (<40).
+    """
+    sentiment = analyst["sentiment"].copy()
+    sentiment = sentiment.sort_values("sentiment_score", ascending=True)
+
+    colors = []
+    for s in sentiment["sentiment_score"]:
+        if s >= 70:
+            colors.append("#3FB950")
+        elif s >= 40:
+            colors.append("#F28C28")
+        else:
+            colors.append("#F85149")
+
+    fig = go.Figure(go.Bar(
+        x=sentiment["sentiment_score"],
+        y=sentiment.index,
+        orientation="h",
+        marker_color=colors,
+        text=[f"{s:.0f}" for s in sentiment["sentiment_score"]],
+        textposition="outside",
+        textfont=dict(color=COLOR_TEXT, size=11),
+        customdata=sentiment["sentiment_label"].astype(str),
+        hovertemplate="<b>%{y}</b><br>Score: %{x:.1f}<br>%{customdata}<extra></extra>",
+    ))
+
+    fig.add_vline(x=70, line_dash="dot", line_color="#3FB950", line_width=1,
+                  annotation_text="Bullish", annotation_font_color="#3FB950",
+                  annotation_position="top right")
+    fig.add_vline(x=40, line_dash="dot", line_color="#F28C28", line_width=1,
+                  annotation_text="Neutral", annotation_font_color="#F28C28",
+                  annotation_position="top right")
+
+    fig.update_layout(
+        title=dict(text="<b>ML Composite Sentiment Score</b><br><sup>Rating quality (40%) + Price target upside (40%) + Buy ratio (20%)</sup>",
+                   font=dict(size=14, color=COLOR_TEXT), x=0.5, xanchor="center"),
+        paper_bgcolor=COLOR_BG, plot_bgcolor=COLOR_PANEL,
+        font=dict(color=COLOR_TEXT, size=11),
+        height=420,
+        xaxis=dict(title="Score (0-100)", range=[0, 110], gridcolor=COLOR_GRID),
+        yaxis=dict(gridcolor=COLOR_GRID),
+        margin=dict(l=60, r=60, t=80, b=40),
+    )
+    return fig
+
+
+def build_price_target_chart(analyst: dict) -> go.Figure:
+    """
+    Horizontal analyst price target range chart.
+    Shows low-to-high range bar, mean target diamond, current price circle.
+    Color: green if current < mean (upside), red if current > mean (downside).
+    """
+    snap = analyst["snapshots"].dropna(subset=["target_mean", "current_price"]).copy()
+    snap = snap.sort_values("upside_pct", ascending=True)
+    tickers = snap.index.tolist()
+
+    fig = go.Figure()
+
+    for ticker in tickers:
+        row     = snap.loc[ticker]
+        cur     = row["current_price"]
+        mean    = row["target_mean"]
+        high    = row["target_high"]
+        low     = row["target_low"]
+        upside  = row["upside_pct"]
+        color   = "#3FB950" if upside >= 0 else "#F85149"
+
+        # Range bar: low -> high
+        fig.add_trace(go.Scatter(
+            x=[low, high], y=[ticker, ticker],
+            mode="lines",
+            line=dict(color="rgba(139,148,158,0.5)", width=10),
+            showlegend=False,
+            hoverinfo="skip",
+        ))
+        # Mean target diamond
+        fig.add_trace(go.Scatter(
+            x=[mean], y=[ticker],
+            mode="markers",
+            marker=dict(symbol="diamond", size=14, color=color,
+                        line=dict(color=COLOR_TEXT, width=1)),
+            name="Mean Target" if ticker == tickers[0] else None,
+            showlegend=(ticker == tickers[0]),
+            hovertemplate=f"<b>{ticker}</b><br>Mean Target: ${mean:.0f}<br>Upside: {upside:+.1f}%<extra></extra>",
+        ))
+        # Current price circle
+        fig.add_trace(go.Scatter(
+            x=[cur], y=[ticker],
+            mode="markers",
+            marker=dict(symbol="circle", size=10, color=COLOR_UNSCALED,
+                        line=dict(color=COLOR_TEXT, width=1)),
+            name="Current Price" if ticker == tickers[0] else None,
+            showlegend=(ticker == tickers[0]),
+            hovertemplate=f"<b>{ticker}</b><br>Current: ${cur:.2f}<extra></extra>",
+        ))
+        # Upside annotation
+        fig.add_annotation(
+            x=max(high, cur) * 1.01, y=ticker,
+            text=f"<b>{upside:+.1f}%</b>",
+            showarrow=False,
+            font=dict(color=color, size=10),
+            xanchor="left",
+        )
+
+    fig.update_layout(
+        title=dict(text="<b>Analyst Price Target Ranges</b><br><sup>Line: low-to-high range | Diamond: mean target | Circle: current price</sup>",
+                   font=dict(size=14, color=COLOR_TEXT), x=0.5, xanchor="center"),
+        paper_bgcolor=COLOR_BG, plot_bgcolor=COLOR_PANEL,
+        font=dict(color=COLOR_TEXT, size=11),
+        height=max(350, len(tickers) * 50),
+        legend=dict(orientation="h", x=0.5, xanchor="center", y=1.06,
+                    bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(title="Price ($)", gridcolor=COLOR_GRID),
+        yaxis=dict(gridcolor=COLOR_GRID),
+        hovermode="y unified",
+        margin=dict(l=60, r=80, t=90, b=40),
+    )
+    return fig
+
+
+def build_rating_breakdown_chart(analyst: dict) -> go.Figure:
+    """
+    Stacked horizontal bar: Strong Buy / Buy / Hold / Sell / Strong Sell per ticker.
+    Sorted by bullish ratio descending.
+    """
+    bd = analyst["breakdowns"].copy()
+    bd["total"] = bd[["strong_buy", "buy", "hold", "sell", "strong_sell"]].sum(axis=1).clip(lower=1)
+    bd = bd.sort_values("buy_pct_now", ascending=True)
+    tickers = bd.index.tolist()
+
+    segments = [
+        ("Strong Buy", "strong_buy", "#3FB950"),
+        ("Buy",        "buy",        "#79C0FF"),
+        ("Hold",       "hold",       "#F28C28"),
+        ("Sell",       "sell",       "#FF7B72"),
+        ("Strong Sell","strong_sell","#F85149"),
+    ]
+
+    fig = go.Figure()
+    for label, col, color in segments:
+        pct = (bd[col].fillna(0) / bd["total"] * 100).round(1)
+        fig.add_trace(go.Bar(
+            name=label,
+            x=pct,
+            y=tickers,
+            orientation="h",
+            marker_color=color,
+            text=[f"{v:.0f}%" if v >= 5 else "" for v in pct],
+            textposition="inside",
+            insidetextanchor="middle",
+            hovertemplate=f"<b>%{{y}}</b><br>{label}: %{{x:.1f}}%<extra></extra>",
+        ))
+
+    fig.update_layout(
+        barmode="stack",
+        title=dict(text="<b>Analyst Rating Breakdown</b><br><sup>% of analysts per rating category</sup>",
+                   font=dict(size=14, color=COLOR_TEXT), x=0.5, xanchor="center"),
+        paper_bgcolor=COLOR_BG, plot_bgcolor=COLOR_PANEL,
+        font=dict(color=COLOR_TEXT, size=11),
+        height=max(350, len(tickers) * 48),
+        legend=dict(orientation="h", x=0.5, xanchor="center", y=1.06,
+                    bgcolor="rgba(0,0,0,0)", traceorder="normal"),
+        xaxis=dict(title="% of Analysts", range=[0, 100], gridcolor=COLOR_GRID),
+        yaxis=dict(gridcolor=COLOR_GRID),
+        margin=dict(l=60, r=40, t=90, b=40),
+    )
+    return fig
+
+
+def build_revision_drift_chart(analyst: dict) -> go.Figure:
+    """
+    Two-panel chart:
+      Left:  Target price revision trend (avg $ change in last 30 days)
+      Right: Rating drift (buy% change over 3 months)
+    """
+    rev   = analyst["revision_trend"]
+    drift = analyst["rating_drift"]
+
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=["Avg Target Revision (Last 30 Days, $)", "Consensus Drift (3-Month Buy% Change)"],
+        horizontal_spacing=0.12,
+    )
+
+    # Panel 1: Target revision
+    if not rev.empty:
+        rev_sorted = rev["avg_target_change"].sort_values()
+        fig.add_trace(go.Bar(
+            x=rev_sorted.values,
+            y=rev_sorted.index,
+            orientation="h",
+            marker_color=["#3FB950" if v >= 0 else "#F85149" for v in rev_sorted.values],
+            text=[f"${v:+.1f}" for v in rev_sorted.values],
+            textposition="outside",
+            textfont=dict(size=10, color=COLOR_TEXT),
+            showlegend=False,
+            hovertemplate="<b>%{y}</b><br>Avg revision: $%{x:+.1f}<extra></extra>",
+        ), row=1, col=1)
+        fig.add_vline(x=0, line_color=COLOR_SUBTEXT, line_width=1, row=1, col=1)
+
+    # Panel 2: Rating drift
+    if not drift.empty:
+        drift_sorted = drift["drift"].sort_values()
+        fig.add_trace(go.Bar(
+            x=drift_sorted.values,
+            y=drift_sorted.index,
+            orientation="h",
+            marker_color=["#3FB950" if v >= 0 else "#F85149" for v in drift_sorted.values],
+            text=[f"{v:+.1f}pp" for v in drift_sorted.values],
+            textposition="outside",
+            textfont=dict(size=10, color=COLOR_TEXT),
+            showlegend=False,
+            hovertemplate="<b>%{y}</b><br>Buy% drift: %{x:+.1f}pp<extra></extra>",
+        ), row=1, col=2)
+        fig.add_vline(x=0, line_color=COLOR_SUBTEXT, line_width=1, row=1, col=2)
+
+    fig.update_layout(
+        paper_bgcolor=COLOR_BG, plot_bgcolor=COLOR_PANEL,
+        font=dict(color=COLOR_TEXT, size=11),
+        height=400,
+        margin=dict(l=60, r=80, t=60, b=40),
+    )
+    fig.update_xaxes(gridcolor=COLOR_GRID, zerolinecolor=COLOR_GRID)
+    fig.update_yaxes(gridcolor=COLOR_GRID)
+    return fig
+
+
+def build_consensus_table_html(analyst: dict) -> str:
+    """
+    HTML summary table: one row per ticker with consensus metrics + sentiment score.
+    Color-coded consensus and upside cells.
+    """
+    snap      = analyst["snapshots"].copy()
+    sentiment = analyst["sentiment"].copy()
+
+    CONSENSUS_COLOR = {
+        "strong_buy":  "#3FB950", "buy":  "#79C0FF",
+        "hold":        "#F28C28",
+        "sell":        "#FF7B72", "strong_sell": "#F85149",
+        "n/a":         COLOR_SUBTEXT,
+    }
+
+    header = """
+<table class="stats-table analyst-table">
+  <thead><tr>
+    <th>Ticker</th><th>Price</th><th>Consensus</th>
+    <th>Score</th><th>Analysts</th>
+    <th>Target Low</th><th>Target Mean</th><th>Target High</th>
+    <th>Upside %</th><th>Sentiment (ML)</th>
+  </tr></thead>
+  <tbody>"""
+
+    rows = ""
+    for ticker in snap.index:
+        r   = snap.loc[ticker]
+        s   = sentiment.loc[ticker] if ticker in sentiment.index else {}
+
+        cons_key   = str(r.get("consensus_key", "n/a")).lower()
+        cons_color = CONSENSUS_COLOR.get(cons_key, COLOR_SUBTEXT)
+        upside     = r.get("upside_pct", float("nan"))
+        up_color   = "#3FB950" if upside >= 15 else ("#F28C28" if upside >= 0 else "#F85149")
+        sent_score = s.get("sentiment_score", float("nan")) if hasattr(s, "get") else float("nan")
+        sent_label = s.get("sentiment_label", "") if hasattr(s, "get") else ""
+        sent_color = "#3FB950" if sent_score >= 70 else ("#F28C28" if sent_score >= 40 else "#F85149")
+
+        def _fmt(v, prefix="$", decimals=2):
+            try:
+                return f"{prefix}{v:.{decimals}f}" if not (v != v) else "—"
+            except Exception:
+                return "—"
+
+        rows += f"""
+<tr>
+  <td style="font-weight:600;color:{COLOR_TEXT}">{ticker}</td>
+  <td>{_fmt(r.get('current_price'))}</td>
+  <td style="color:{cons_color};font-weight:600">{r.get('consensus_key','—').replace('_',' ').title()}</td>
+  <td>{_fmt(r.get('consensus_score'), prefix='', decimals=2)}</td>
+  <td>{int(r.get('n_analysts', 0)) if r.get('n_analysts') == r.get('n_analysts') else '—'}</td>
+  <td>{_fmt(r.get('target_low'))}</td>
+  <td>{_fmt(r.get('target_mean'))}</td>
+  <td>{_fmt(r.get('target_high'))}</td>
+  <td style="color:{up_color};font-weight:600">{f'{upside:+.1f}%' if upside==upside else '—'}</td>
+  <td style="color:{sent_color};font-weight:600">{f'{sent_score:.0f} — {sent_label}' if sent_score==sent_score else '—'}</td>
+</tr>"""
+
+    return header + rows + "\n  </tbody>\n</table>"
+
+
+def build_firm_accuracy_table_html(analyst: dict) -> str:
+    """HTML leaderboard table of analyst firm directional accuracy."""
+    fa = analyst["firm_accuracy"]
+    if fa is None or fa.empty:
+        return "<p style='color:#8B949E;font-size:0.8rem'>Insufficient historical data for firm accuracy calculation.</p>"
+
+    header = """
+<table class="stats-table analyst-table">
+  <thead><tr>
+    <th>#</th><th>Firm</th><th>Ratings Evaluated</th>
+    <th>Correct</th><th>Accuracy</th><th>Avg Fwd Return</th>
+  </tr></thead>
+  <tbody>"""
+
+    rows = ""
+    for i, row in fa.iterrows():
+        acc = row["accuracy_pct"]
+        acc_color = "#3FB950" if acc >= 60 else ("#F28C28" if acc >= 50 else "#F85149")
+        ret = row["avg_return"]
+        ret_color = "#3FB950" if ret > 0 else "#F85149"
+        rows += f"""
+<tr>
+  <td style="color:{COLOR_SUBTEXT}">{i+1}</td>
+  <td style="font-weight:600;color:{COLOR_TEXT}">{row['Firm']}</td>
+  <td>{int(row['n_ratings'])}</td>
+  <td>{int(row['n_correct'])}</td>
+  <td style="color:{acc_color};font-weight:600">{acc:.1f}%</td>
+  <td style="color:{ret_color}">{ret:+.1f}%</td>
+</tr>"""
+
+    return header + rows + "\n  </tbody>\n</table>"
+
+
+def build_upgrades_table_html(analyst: dict) -> str:
+    """
+    HTML table of recent upgrades/downgrades, sorted newest first.
+    Green left border = upgrade, red = downgrade, gray = maintain.
+    Includes JS click-to-sort on column headers.
+    """
+    upg = analyst["upgrades"]
+    if upg is None or upg.empty:
+        return "<p style='color:#8B949E;font-size:0.8rem'>No recent upgrade/downgrade data.</p>"
+
+    ACTION_COLOR = {"up": "#3FB950", "down": "#F85149"}
+    ACTION_LABEL = {"up": "Upgrade", "down": "Downgrade", "main": "Maintain",
+                    "reit": "Reiterate", "init": "Initiate"}
+
+    header = """
+<table class="stats-table analyst-table sortable" id="upgrades-table">
+  <thead><tr>
+    <th onclick="sortTable('upgrades-table',0)">Date</th>
+    <th onclick="sortTable('upgrades-table',1)">Ticker</th>
+    <th onclick="sortTable('upgrades-table',2)">Firm</th>
+    <th onclick="sortTable('upgrades-table',3)">Action</th>
+    <th onclick="sortTable('upgrades-table',4)">From Grade</th>
+    <th onclick="sortTable('upgrades-table',5)">To Grade</th>
+    <th onclick="sortTable('upgrades-table',6)">New Target</th>
+    <th onclick="sortTable('upgrades-table',7)">Prior Target</th>
+    <th onclick="sortTable('upgrades-table',8)">Change ($)</th>
+  </tr></thead>
+  <tbody>"""
+
+    rows = ""
+    for _, row in upg.head(100).iterrows():
+        action    = str(row.get("Action", "")).lower()
+        color     = ACTION_COLOR.get(action, COLOR_SUBTEXT)
+        label     = ACTION_LABEL.get(action, action.title())
+        date_str  = str(row.get("date", ""))[:10]
+        cur_tgt   = row.get("currentPriceTarget")
+        prior_tgt = row.get("priorPriceTarget")
+        change    = row.get("target_change")
+
+        def _m(v, prefix="$"):
+            try:
+                return f"{prefix}{v:.0f}" if v == v else "—"
+            except Exception:
+                return "—"
+        def _c(v):
+            try:
+                return f"${v:+.0f}" if v == v else "—"
+            except Exception:
+                return "—"
+
+        chg_color = "#3FB950" if (change == change and change > 0) else ("#F85149" if (change == change and change < 0) else COLOR_SUBTEXT)
+        rows += f"""
+<tr style="border-left:3px solid {color}">
+  <td style="color:{COLOR_SUBTEXT};font-size:0.78rem">{date_str}</td>
+  <td style="font-weight:600;color:{COLOR_TEXT}">{row.get('ticker','')}</td>
+  <td>{row.get('Firm','')}</td>
+  <td style="color:{color};font-weight:600">{label}</td>
+  <td style="color:{COLOR_SUBTEXT}">{row.get('FromGrade','—')}</td>
+  <td style="color:{COLOR_TEXT}">{row.get('ToGrade','—')}</td>
+  <td>{_m(cur_tgt)}</td>
+  <td style="color:{COLOR_SUBTEXT}">{_m(prior_tgt)}</td>
+  <td style="color:{chg_color};font-weight:600">{_c(change)}</td>
+</tr>"""
+
+    return header + rows + "\n  </tbody>\n</table>"
+
+
+def build_analyst_tab_html(analyst: dict) -> str:
+    """
+    Assemble all analyst section HTML for Tab 3.
+    Returns a complete HTML fragment (no <html>/<body> wrapper).
+    """
+    import plotly.io as pio
+
+    sentiment_fig  = build_sentiment_chart(analyst)
+    target_fig     = build_price_target_chart(analyst)
+    breakdown_fig  = build_rating_breakdown_chart(analyst)
+    rev_drift_fig  = build_revision_drift_chart(analyst)
+
+    sentiment_html  = sentiment_fig.to_html(full_html=False, include_plotlyjs=False, config={"responsive": True})
+    target_html     = target_fig.to_html(full_html=False, include_plotlyjs=False, config={"responsive": True})
+    breakdown_html  = breakdown_fig.to_html(full_html=False, include_plotlyjs=False, config={"responsive": True})
+    rev_drift_html  = rev_drift_fig.to_html(full_html=False, include_plotlyjs=False, config={"responsive": True})
+
+    consensus_tbl  = build_consensus_table_html(analyst)
+    accuracy_tbl   = build_firm_accuracy_table_html(analyst)
+    upgrades_tbl   = build_upgrades_table_html(analyst)
+
+    return f"""
+    <h2>Consensus Overview <span class="badge badge-analyst">Live Data</span></h2>
+    <div class="table-container">{consensus_tbl}</div>
+
+    <h2>ML Sentiment Score <span class="badge badge-ml">Composite Signal</span></h2>
+    <div class="chart-container">{sentiment_html}</div>
+
+    <h2>Price Target Ranges <span class="badge badge-analyst">Low / Mean / High</span></h2>
+    <div class="chart-container">{target_html}</div>
+
+    <h2>Rating Breakdown <span class="badge badge-analyst">Buy vs Hold vs Sell</span></h2>
+    <div class="chart-container">{breakdown_html}</div>
+
+    <h2>Revision & Drift Analysis <span class="badge badge-ml">ML Analytics</span></h2>
+    <div class="chart-container">{rev_drift_html}</div>
+
+    <h2>Firm Accuracy Leaderboard <span class="badge badge-ml">63-Day Directional</span></h2>
+    <div class="table-container">{accuracy_tbl}</div>
+
+    <h2>Recent Upgrades & Downgrades <span class="badge badge-analyst">Last 6 Months</span></h2>
+    <div class="table-container">{upgrades_tbl}</div>
+"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # DASHBOARD ASSEMBLER
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_dashboard(results: dict, output_path: str = "tsmom_dashboard.html"):
+def build_dashboard(results: dict, analyst_results: dict = None, output_path: str = "tsmom_dashboard.html"):
     """
     Assemble all charts into a two-tab self-contained HTML dashboard.
 
@@ -480,6 +922,12 @@ def build_dashboard(results: dict, output_path: str = "tsmom_dashboard.html"):
     metrics_fig      = build_metrics_comparison_chart(results)
     imp_fig          = build_feature_importance_chart(results)
 
+    # ── Analyst Tab 3 ─────────────────────────────────────────────────────
+    analyst_tab_html = build_analyst_tab_html(analyst_results) if analyst_results else (
+        "<p style='color:#8B949E;padding:40px;text-align:center'>"
+        "Analyst data unavailable — run with analyst_results to enable this tab.</p>"
+    )
+
     # ── Serialize (only fig1 carries the Plotly.js bundle) ────────────────
     main_html    = fig1.to_html(full_html=False, include_plotlyjs=True,
                                 config={"responsive": True})
@@ -553,6 +1001,10 @@ def build_dashboard(results: dict, output_path: str = "tsmom_dashboard.html"):
       color: {COLOR_LR};
       border-bottom-color: {COLOR_LR};
     }}
+    .tab-btn.analyst-tab.active {{
+      color: {COLOR_ANALYST};
+      border-bottom-color: {COLOR_ANALYST};
+    }}
 
     /* ── Tab panels ── */
     .tab-panel {{ display: none; }}
@@ -582,8 +1034,13 @@ def build_dashboard(results: dict, output_path: str = "tsmom_dashboard.html"):
       vertical-align: middle;
       font-weight: 400;
     }}
-    .badge-ml   {{ background: rgba(63,185,80,0.15);  color: {COLOR_LR}; }}
-    .badge-base {{ background: rgba(76,155,232,0.15); color: {COLOR_UNSCALED}; }}
+    .badge-ml      {{ background: rgba(63,185,80,0.15);   color: {COLOR_LR}; }}
+    .badge-base    {{ background: rgba(76,155,232,0.15);  color: {COLOR_UNSCALED}; }}
+    .badge-analyst {{ background: rgba(163,113,247,0.15); color: {COLOR_ANALYST}; }}
+
+    /* ── Analyst table extras ── */
+    .analyst-table th {{ cursor: pointer; user-select: none; }}
+    .analyst-table th:hover {{ color: {COLOR_TEXT}; }}
 
     .chart-container {{ width: 100%; }}
     .table-container  {{ width: 100%; margin-bottom: 4px; overflow-x: auto; }}
@@ -637,8 +1094,9 @@ def build_dashboard(results: dict, output_path: str = "tsmom_dashboard.html"):
 
   <!-- Tab bar -->
   <div class="tab-bar">
-    <button class="tab-btn active"   id="btn-tsmom" onclick="switchTab('tsmom')">TSMOM Strategy</button>
-    <button class="tab-btn ml-tab"   id="btn-ml"    onclick="switchTab('ml')">ML Comparison</button>
+    <button class="tab-btn active"      id="btn-tsmom"    onclick="switchTab('tsmom')">TSMOM Strategy</button>
+    <button class="tab-btn ml-tab"      id="btn-ml"       onclick="switchTab('ml')">ML Comparison</button>
+    <button class="tab-btn analyst-tab" id="btn-analyst"  onclick="switchTab('analyst')">Analyst Ratings</button>
   </div>
 
   <!-- Tab 1: TSMOM -->
@@ -665,6 +1123,11 @@ def build_dashboard(results: dict, output_path: str = "tsmom_dashboard.html"):
     <div class="chart-container">{imp_html}</div>
   </div>
 
+  <!-- Tab 3: Analyst Ratings -->
+  <div id="tab-analyst" class="tab-panel">
+    {analyst_tab_html}
+  </div>
+
   <footer>
     TSMOM: Moskowitz, T., Ooi, Y.H., &amp; Pedersen, L.H. (2012). &quot;Time Series Momentum.&quot;
     <i>Journal of Financial Economics</i>, 104(2), 228-250.<br>
@@ -679,14 +1142,31 @@ def build_dashboard(results: dict, output_path: str = "tsmom_dashboard.html"):
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.getElementById('tab-' + id).classList.add('active');
       document.getElementById('btn-' + id).classList.add('active');
-
-      // Plotly charts inside hidden divs need a resize signal when revealed.
       requestAnimationFrame(() => {{
         const panel = document.getElementById('tab-' + id);
         panel.querySelectorAll('.plotly-graph-div').forEach(div => {{
           if (window.Plotly) Plotly.relayout(div, {{autosize: true}});
         }});
       }});
+    }}
+
+    // Click-to-sort for analyst tables
+    function sortTable(tableId, col) {{
+      const table = document.getElementById(tableId);
+      if (!table) return;
+      const tbody = table.tBodies[0];
+      const rows  = Array.from(tbody.rows);
+      const asc   = table.dataset.sortCol == col && table.dataset.sortDir !== 'asc';
+      rows.sort((a, b) => {{
+        const va = a.cells[col]?.innerText.replace(/[$%+,]/g,'') || '';
+        const vb = b.cells[col]?.innerText.replace(/[$%+,]/g,'') || '';
+        const na = parseFloat(va), nb = parseFloat(vb);
+        const cmp = !isNaN(na) && !isNaN(nb) ? na - nb : va.localeCompare(vb);
+        return asc ? cmp : -cmp;
+      }});
+      rows.forEach(r => tbody.appendChild(r));
+      table.dataset.sortCol = col;
+      table.dataset.sortDir = asc ? 'asc' : 'desc';
     }}
   </script>
 
@@ -705,8 +1185,9 @@ def build_dashboard(results: dict, output_path: str = "tsmom_dashboard.html"):
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    results    = run_pipeline()
-    ml_results = run_ml_pipeline(results["log_returns"])
+    results         = run_pipeline()
+    ml_results      = run_ml_pipeline(results["log_returns"])
     results.update(ml_results)
-    build_dashboard(results, output_path="index.html")
+    analyst_results = run_analyst_pipeline(WATCHLIST)
+    build_dashboard(results, analyst_results=analyst_results, output_path="index.html")
     print("\nOpen index.html in your browser to view the dashboard.")
