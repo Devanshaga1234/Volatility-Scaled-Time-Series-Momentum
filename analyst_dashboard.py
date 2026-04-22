@@ -723,9 +723,9 @@ def build_analyst_dashboard(analyst: dict, output_path: str = "analyst_dashboard
         items.push([color,
           `The average analyst price target of <strong>$${{(d.targetMean||0).toFixed(2)}}</strong> implies ` +
           `<strong>${{Math.abs(d.upside).toFixed(1)}}% ${{dir}}</strong> from the current price. ` +
-          (d.upside >= 20 ? 'This is a large implied upside — analysts see significant room to run.' :
-           d.upside >= 0  ? 'Modest upside; the stock may be approaching fair value in the analyst consensus.' :
-                            'Analysts\' mean target is below the current price — the stock may be overvalued relative to consensus.')
+          (d.upside >= 20 ? "This is a large implied upside — analysts see significant room to run." :
+           d.upside >= 0  ? "Modest upside; the stock may be approaching fair value in the analyst consensus." :
+                            "Analysts' mean target is below the current price — the stock may be overvalued relative to consensus.")
         ]);
       }}
 
@@ -736,9 +736,9 @@ def build_analyst_dashboard(analyst: dict, output_path: str = "analyst_dashboard
         items.push(['#8B949E',
           `Analyst price target range: <strong>$${{(d.targetLow||0).toFixed(2)}} — $${{(d.targetHigh||0).toFixed(2)}}</strong> ` +
           `(spread: ${{spreadPct.toFixed(0)}}% of mean target). ` +
-          (spreadPct > 50 ? 'The wide spread indicates significant disagreement among analysts about the stock\'s fair value.' :
-           spreadPct > 20 ? 'Moderate spread — some divergence in analyst views.' :
-                            'Tight spread — analysts are broadly aligned on valuation.')
+          (spreadPct > 50 ? "The wide spread indicates significant disagreement among analysts about the stock's fair value." :
+           spreadPct > 20 ? "Moderate spread — some divergence in analyst views." :
+                            "Tight spread — analysts are broadly aligned on valuation.")
         ]);
       }}
 
