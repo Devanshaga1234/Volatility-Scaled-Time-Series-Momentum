@@ -499,8 +499,7 @@ def build_analyst_dashboard(analyst: dict, output_path: str = "analyst_dashboard
     }}
 
     /* ── Ticker Lookup ── */
-    const PROXY = 'https://query2.finance.yahoo.com/v10/finance/quoteSummary/';
-    const MODULES = 'financialData,summaryDetail,quoteType,price,recommendationTrend';
+    const API_BASE = 'http://localhost:8050/api/lookup';
 
     async function doLookup() {{
       const raw    = document.getElementById('ticker-input').value.trim().toUpperCase();
@@ -517,15 +516,16 @@ def build_analyst_dashboard(analyst: dict, output_path: str = "analyst_dashboard
       btn.disabled = true;
 
       try {{
-        const url  = `${{PROXY}}${{raw}}?modules=${{MODULES}}&corsDomain=finance.yahoo.com`;
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`HTTP ${{resp.status}}`);
+        const resp = await fetch(`${{API_BASE}}?ticker=${{raw}}`);
+        if (!resp.ok) throw new Error(`Server error ${{resp.status}}`);
         const json = await resp.json();
-        const res  = json?.quoteSummary?.result?.[0];
-        if (!res) throw new Error('No data returned. Check the ticker symbol.');
-        renderResult(raw, res);
+        if (!json.ok) throw new Error(json.error || 'Unknown error');
+        renderResult(raw, json.data);
       }} catch(e) {{
-        errEl.textContent = `Could not fetch data for "${{raw}}": ${{e.message}}`;
+        const isConn = e.message.includes('fetch') || e.message.includes('Failed');
+        errEl.innerHTML = isConn
+          ? `<strong>Server not running.</strong> In your terminal: <code>python serve.py</code> then open <a href="http://localhost:8050" style="color:#79C0FF">http://localhost:8050</a>`
+          : `Could not fetch data for "<strong>${{raw}}</strong>": ${{e.message}}`;
         errEl.style.display = 'block';
       }} finally {{
         spin.style.display = 'none';
