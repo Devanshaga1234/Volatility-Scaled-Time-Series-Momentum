@@ -18,6 +18,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import yfinance as yf
+from portfolio_builder import get_portfolio_summary
 
 PORT = 8050
 BASE  = os.path.dirname(os.path.abspath(__file__))
@@ -163,6 +164,15 @@ class Handler(BaseHTTPRequestHandler):
         elif path in ("/tsmom", "/index.html"):
             self._send_file(TSMOM_FILE,
                             "index.html not found. Run: python dashboard.py")
+
+        elif path == "/api/portfolio":
+            params  = urllib.parse.parse_qs(parsed.query)
+            deposit = float((params.get("deposit") or ["30"])[0])
+            try:
+                data = get_portfolio_summary(deposit=deposit)
+                self._send_json(data)
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, 500)
 
         elif path == "/api/lookup":
             params = urllib.parse.parse_qs(parsed.query)

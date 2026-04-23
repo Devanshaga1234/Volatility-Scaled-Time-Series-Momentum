@@ -2,9 +2,9 @@
 
 ## Context
 
-Build a modular, research-first portfolio system on top of the existing TSMOM + ML framework, targeting high returns with controlled risk. Capital: <$10k. Assets: US equities/ETFs, options, income instruments.
+Build a modular, research-first portfolio system on top of the existing TSMOM + ML framework, targeting high returns with controlled risk. Capital: starts at $30/week DCA, targeting $10k+ over time. Assets: US equities/ETFs.
 
-**Goal:** Prove strategies in simulation first, then wire to a live broker.
+**Goal:** Data-driven portfolio construction combining quant signals, ML, and analyst intelligence — proven in simulation first, live execution later.
 
 ### Honest Return Expectations
 
@@ -20,9 +20,9 @@ Build a modular, research-first portfolio system on top of the existing TSMOM + 
 
 ---
 
-## Architecture: 4 New Modules
+## Architecture: 5 Core Modules
 
-Builds on top of `tsmom.py` / `ml_engine.py` / `dashboard.py`.
+Builds on top of `tsmom.py` / `ml_engine.py` / `dashboard.py` / `analyst_data.py`.
 
 ---
 
@@ -92,7 +92,7 @@ build_optimal_portfolio(log_returns, signals, method='risk_parity') -> pd.DataFr
 
 ### Phase 3 — `risk_manager.py`: Risk Controls Layer
 
-Critical for a small account — one bad trade on <$10k is catastrophic.
+Critical for a small account — one bad trade on a small account is catastrophic.
 
 **Position-level rules:**
 - Max single position: 20% of portfolio NAV
@@ -138,9 +138,54 @@ def run_full_pipeline(config: dict) -> dict:
 
 ---
 
-### Phase 5 — Dashboard Tab 3: "Portfolio Analysis"
+### Phase 5 — `portfolio_builder.py`: $30/Week Smart DCA Engine ✅ IMPLEMENTED
 
-Add a third tab to the existing two-tab dashboard:
+**Live module powering the Portfolio Builder tab in the analyst dashboard.**
+
+Takes a weekly deposit amount (default $30, starting 2026-04-23) and outputs a
+fully adaptive, data-driven portfolio allocation based on:
+
+1. **Market regime detection** — SPY 200-day MA, 20-day realized vol, 60-day momentum
+2. **ML sentiment overlay** — analyst ML scores (0–100) tilt individual stock weights
+3. **Regime-based base allocation** — 4 regimes, each with a different asset mix
+4. **Monte Carlo projection** — 500 simulations over 10 years, 3 confidence bands
+
+**Market Regimes:**
+
+| Regime | Trigger | Asset Mix |
+|---|---|---|
+| Bull / Low Vol | SPY > MA200, vol < 18% | Tech-heavy: QQQ 35%, SPY 20%, NVDA 15%, MSFT 10%, AAPL 10%, GLD 5%, AMZN 5% |
+| Bull / High Vol | SPY > MA200, vol ≥ 18% | Balanced: SPY 30%, QQQ 20%, GLD 15%, MSFT 15%, AAPL 10%, TLT 10% |
+| Bear / Low Vol | SPY < MA200, vol < 25% | Defensive: TLT 30%, GLD 25%, SPY 20%, MSFT 15%, AAPL 10% |
+| Crisis | SPY < MA200, vol ≥ 25% | Safe haven: GLD 35%, TLT 30%, SPY 15%, MSFT 10%, AAPL 10% |
+
+**Analyst Overlay:**
+- ML sentiment score > 70 → overweight ticker by up to +5%
+- ML sentiment score < 40 → underweight ticker by up to −5%
+- Only applied to individual stocks (not ETFs)
+
+**Projection Parameters (calibrated to historical regime returns):**
+
+| Regime | Mean Ann. Return | Ann. Volatility |
+|---|---|---|
+| Bull / Low Vol | 18% | 12% |
+| Bull / High Vol | 10% | 20% |
+| Bear / Low Vol | 2% | 15% |
+| Crisis | −5% | 35% |
+
+```python
+detect_market_regime() -> dict              # regime key + all indicators
+fetch_current_prices(tickers) -> dict       # {ticker: price}
+build_allocation(regime, analyst_scores) -> list  # [{ticker, weight, dollar, shares}]
+project_growth_monte_carlo(deposit, regime, years=10, n_sims=500) -> dict
+get_portfolio_summary(deposit=30.0, analyst_scores=None) -> dict  # API entry point
+```
+
+---
+
+### Phase 6 — Dashboard: "Portfolio Analysis" Tab (backtest-focused)
+
+Add a tab to the TSMOM dashboard (index.html):
 
 - Efficient frontier plot (return vs vol scatter of strategy combinations)
 - Rolling correlation heatmap (between assets)
@@ -152,7 +197,7 @@ Modify `dashboard.py` — add chart builders and wire into `build_dashboard()`.
 
 ---
 
-### Phase 6 — Live Trading (future, after Phases 1–5 proven)
+### Phase 7 — Live Trading (future, after Phases 1–5 proven)
 
 - Broker: **Alpaca** (commission-free, paper trading, Python SDK)
 - Paper trade minimum 3 months before real money
@@ -163,14 +208,17 @@ Modify `dashboard.py` — add chart builders and wire into `build_dashboard()`.
 
 ## Files to Create / Modify
 
-| File | Action | Reuses From |
+| File | Status | Reuses From |
 |---|---|---|
-| `strategy_engine.py` | Create | `_compute_rsi()` (ml_engine), `compute_realized_vol()` (tsmom) |
-| `portfolio_optimizer.py` | Create | `compute_log_returns()` (tsmom) |
-| `risk_manager.py` | Create | `drawdown_series()`, `compute_realized_vol()` (tsmom) |
-| `portfolio_runner.py` | Create | All of tsmom.py, ml_engine.py, new modules |
-| `dashboard.py` | Modify | Add Tab 3 chart builders |
-| `requirements.txt` | Modify | Add `cvxpy` (Phase 2), `alpaca-py` (Phase 6) |
+| `portfolio_builder.py` | **Done** | `analyst_data.py` (sentiment scores) |
+| `strategy_engine.py` | Planned | `_compute_rsi()` (ml_engine), `compute_realized_vol()` (tsmom) |
+| `portfolio_optimizer.py` | Planned | `compute_log_returns()` (tsmom) |
+| `risk_manager.py` | Planned | `drawdown_series()`, `compute_realized_vol()` (tsmom) |
+| `portfolio_runner.py` | Planned | All of tsmom.py, ml_engine.py, new modules |
+| `dashboard.py` | Planned | Add Tab 4 (backtest portfolio analysis) |
+| `analyst_dashboard.py` | **Done** | Added Portfolio Builder tab |
+| `serve.py` | **Done** | Added `/api/portfolio` endpoint |
+| `requirements.txt` | Planned | Add `cvxpy` (Phase 2), `alpaca-py` (Phase 7) |
 
 ## Key Functions — Do Not Rewrite
 
@@ -185,10 +233,12 @@ From `ml_engine.py`: `engineer_features`, `_compute_rsi`, `run_walk_forward`, `_
 ```bash
 python portfolio_runner.py   # strategy breakdown + risk stats in terminal
 python dashboard.py          # regenerate index.html
-# open index.html, verify Tab 3 renders correctly
+# open http://localhost:8050/tsmom, verify tabs render correctly
+# open http://localhost:8050/analyst, verify Portfolio Builder tab
 ```
 
 1. No lookahead bias — all new signals use `.shift(1)` before `build_portfolio_returns()`
 2. No survivorship bias — assets fixed before backtest starts
 3. Risk circuits fire — test by injecting a -20% return shock manually
 4. Options IV rank — verify uses only historical options data, no future IV
+5. Portfolio projection — verify Monte Carlo uses weekly, not daily, return parameters
