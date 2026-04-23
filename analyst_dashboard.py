@@ -507,7 +507,7 @@ def build_analyst_dashboard(analyst: dict, output_path: str = "analyst_dashboard
           <thead><tr>
             <th>Rank</th><th>Ticker</th><th>Name</th><th>Score</th>
             <th>Weight</th><th>$ Deploy</th><th>Price</th><th>Shares</th>
-            <th>21d Return</th><th>63d Return</th><th>Vol (Ann)</th><th>RSI</th><th>Analyst</th>
+            <th>21d Return</th><th>63d Return</th><th>Vol (Ann)</th><th>RSI</th><th>Analyst</th><th>Flags</th>
           </tr></thead>
           <tbody id="sp-pick-body"></tbody>
         </table>
@@ -926,11 +926,12 @@ def build_analyst_dashboard(analyst: dict, output_path: str = "analyst_dashboard
           <td style="font-size:0.78rem">${{row.shares != null ? row.shares : '—'}}</td>
           <td style="color:${{mc}};font-weight:600">${{fmtP(row.ret_21d)}}</td>
           <td style="color:${{m6c}};font-weight:600">${{fmtP(row.ret_63d)}}</td>
-          <td>${{row.vol_20d}}%</td>
+          <td style="color:${{row.vol_20d>60?'#F28C28':'#E6EDF3'}}">${{row.vol_20d}}%</td>
           <td style="color:${{row.rsi_14 > 70 ? '#F28C28' : row.rsi_14 < 40 ? '#79C0FF' : '#E6EDF3'}}">${{row.rsi_14}}</td>
           <td><span style="background:${{row.analyst_score>=70?'#3FB95022':row.analyst_score<40?'#F8514922':'#8B949E22'}};
                color:${{row.analyst_score>=70?'#3FB950':row.analyst_score<40?'#F85149':'#8B949E'}};
                padding:2px 7px;border-radius:4px;font-size:0.75rem">${{row.analyst_score.toFixed(0)}}</span></td>
+          <td style="font-size:0.7rem;color:#F28C28">${{(row.flags||[]).join(' ')}}</td>
         </tr>`;
       }}).join('');
 

@@ -97,18 +97,25 @@ REGIME_PARAMS = {
 OVERLAY_ELIGIBLE = {"NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMZN", "TSLA", "AMD", "PLTR", "CRM"}
 
 TICKER_NAMES = {
-    "QQQ": "Invesco QQQ (Nasdaq-100 ETF)",
-    "SPY": "SPDR S&P 500 ETF",
-    "GLD": "SPDR Gold Trust ETF",
-    "TLT": "iShares 20+ Year Treasury ETF",
+    "QQQ":  "Invesco QQQ (Nasdaq-100 ETF)",
+    "SPY":  "SPDR S&P 500 ETF",
+    "GLD":  "SPDR Gold Trust ETF",
+    "TLT":  "iShares 20+ Year Treasury ETF",
     "NVDA": "NVIDIA",
     "MSFT": "Microsoft",
     "AAPL": "Apple",
     "AMZN": "Amazon",
-    "GOOGL": "Alphabet (Google)",
+    "GOOGL":"Alphabet (Google)",
     "META": "Meta Platforms",
     "TSLA": "Tesla",
-    "AMD": "AMD",
+    "AMD":  "AMD",
+    "MSTR": "MicroStrategy (Bitcoin proxy)",
+    "PLTR": "Palantir",
+    "CRM":  "Salesforce",
+    "SMCI": "Super Micro Computer",
+    "IONQ": "IonQ (Quantum Computing)",
+    "RKLB": "Rocket Lab",
+    "HOOD": "Robinhood Markets",
 }
 
 
@@ -399,10 +406,13 @@ def get_portfolio_summary(deposit: float = WEEKLY_DEPOSIT,
 # 2-MONTH SPRINT PORTFOLIO
 # ─────────────────────────────────────────────────────────────────────────────
 
-SPRINT_UNIVERSE = ["NVDA", "AMD", "META", "PLTR", "TSLA",
-                   "MSFT", "GOOGL", "AMZN", "AAPL", "CRM"]
+SPRINT_UNIVERSE = [
+    "NVDA", "MSTR", "GOOGL", "AMZN", "AAPL",   # tier-1 picks (today)
+    "MSFT", "META", "AMD",  "PLTR", "TSLA",     # large-cap alternates
+    "CRM",  "SMCI", "IONQ", "RKLB", "HOOD",     # high-beta alternates
+]
 
-SPRINT_WEIGHTS = [0.30, 0.22, 0.18, 0.15, 0.15]  # top-5 concentrated
+SPRINT_WEIGHTS = [0.30, 0.22, 0.18, 0.16, 0.14]  # top-5 concentrated
 
 def _fetch_sprint_signals(tickers: list) -> pd.DataFrame:
     """
@@ -466,34 +476,32 @@ def _fetch_quick_analyst_scores(tickers: list) -> dict:
 def _score_tickers(signals: pd.DataFrame, analyst_scores: dict) -> pd.DataFrame:
     """
     Composite sprint score (0-100):
-      - 30% momentum_21d  (normalized, >0 rewarded, >20% → max pts)
-      - 20% momentum_63d
+      - 30% momentum_21d  (normalized, ±30% range)
+      - 20% momentum_63d  (normalized, ±40% range)
       - 25% analyst ML sentiment
-      - 15% RSI position  (50-70 ideal, penalise >75 overbought)
-      - 10% low vol bonus (lower vol = more predictable momentum)
+      - 15% RSI position  (50-68 = peak; >78 = overbought, heavy penalty)
+      - 10% vol quality   (clean low-vol momentum beats noisy high-vol)
     """
     df = signals.copy()
 
-    # Momentum scores (sigmoid-like, clipped)
     df["s_mom21"] = df["ret_21d"].clip(-0.30, 0.30).apply(
         lambda x: (x / 0.30 + 1) / 2 * 30)
     df["s_mom63"] = df["ret_63d"].clip(-0.40, 0.40).apply(
         lambda x: (x / 0.40 + 1) / 2 * 20)
 
-    # Analyst score (0-100 → 0-25)
     df["s_analyst"] = df["ticker"].map(analyst_scores).fillna(50) / 100 * 25
 
-    # RSI: 50-70 = full marks; below 40 or above 75 = penalised
     def rsi_pts(r):
-        if 50 <= r <= 70:  return 15.0
-        if 40 <= r < 50:   return 10.0 + (r - 40) / 10 * 5
-        if 70 < r <= 80:   return 15.0 - (r - 70) / 10 * 10
-        return max(0, 5.0 - abs(r - 55) / 20 * 5)
+        if   50 <= r <= 68: return 15.0
+        if   68 <  r <= 78: return 15.0 - (r - 68) / 10 * 8   # slight overbought
+        if   45 <= r <  50: return 10.0 + (r - 45) / 5 * 5
+        if   r > 78:        return max(0, 7.0 - (r - 78) / 5 * 7)  # overbought penalty
+        return max(0, 5.0 - abs(r - 55) / 25 * 5)
     df["s_rsi"] = df["rsi_14"].apply(rsi_pts)
 
-    # Low-vol bonus: ann vol < 35% ideal for momentum (penalise >70%)
+    # Vol quality: ideal < 40% ann. Penalise > 70% (speculative noise)
     df["s_vol"] = df["vol_20d"].apply(
-        lambda v: 10 * max(0, 1 - max(0, v - 0.35) / 0.35))
+        lambda v: 10 * max(0, 1 - max(0, v - 0.40) / 0.40))
 
     df["score"] = df[["s_mom21","s_mom63","s_analyst","s_rsi","s_vol"]].sum(axis=1).clip(0, 100)
     return df.sort_values("score", ascending=False).reset_index(drop=True)
@@ -560,7 +568,13 @@ def get_sprint_portfolio(deposit: float = WEEKLY_DEPOSIT,
 
     print("[Sprint] Scoring and ranking...")
     ranked = _score_tickers(signals, analyst_scores)
-    top    = ranked.head(5).reset_index(drop=True)
+    # Filter: exclude overbought (RSI>78), sustained 63d downtrend (<-5%), extreme vol (>90%)
+    filtered = ranked[
+        (ranked["rsi_14"] < 78) &
+        (ranked["ret_63d"] > -0.05) &
+        (ranked["vol_20d"] < 0.90)
+    ].reset_index(drop=True)
+    top = (filtered if len(filtered) >= 5 else ranked).head(5).reset_index(drop=True)
 
     # Allocation: concentrated weights on top 5
     alloc_weights = SPRINT_WEIGHTS[:len(top)]
@@ -583,6 +597,13 @@ def get_sprint_portfolio(deposit: float = WEEKLY_DEPOSIT,
         w    = alloc_weights[i]
         dol  = round(w * deposit_total, 2)
         price = row["price"]
+        vol_pct = round(float(row["vol_20d"]) * 100, 1)
+        rsi_val = round(float(row["rsi_14"]), 1)
+        flags = []
+        if vol_pct > 60:  flags.append("HIGH VOL")
+        if rsi_val > 70:  flags.append("NEAR OVERBOUGHT")
+        if rsi_val < 45:  flags.append("WEAK RSI")
+
         allocation.append({
             "rank":     i + 1,
             "ticker":   row["ticker"],
@@ -594,9 +615,10 @@ def get_sprint_portfolio(deposit: float = WEEKLY_DEPOSIT,
             "shares":   round(dol / price, 4) if price > 0 else None,
             "ret_21d":  round(float(row["ret_21d"]) * 100, 1),
             "ret_63d":  round(float(row["ret_63d"]) * 100, 1),
-            "vol_20d":  round(float(row["vol_20d"]) * 100, 1),
-            "rsi_14":   round(float(row["rsi_14"]), 1),
+            "vol_20d":  vol_pct,
+            "rsi_14":   rsi_val,
             "analyst_score": analyst_scores.get(row["ticker"], 50.0),
+            "flags":    flags,
         })
 
     projection = _sprint_monte_carlo(deposit_total, port_ret, port_vol, weeks=weeks)
