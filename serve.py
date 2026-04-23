@@ -18,7 +18,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import yfinance as yf
-from portfolio_builder import get_portfolio_summary
+from portfolio_builder import get_portfolio_summary, get_sprint_portfolio
 
 PORT = 8050
 BASE  = os.path.dirname(os.path.abspath(__file__))
@@ -170,6 +170,16 @@ class Handler(BaseHTTPRequestHandler):
             deposit = float((params.get("deposit") or ["30"])[0])
             try:
                 data = get_portfolio_summary(deposit=deposit)
+                self._send_json(data)
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, 500)
+
+        elif path == "/api/sprint":
+            params  = urllib.parse.parse_qs(parsed.query)
+            deposit = float((params.get("deposit") or ["30"])[0])
+            weeks   = int((params.get("weeks")   or ["8"])[0])
+            try:
+                data = get_sprint_portfolio(deposit=deposit, weeks=weeks)
                 self._send_json(data)
             except Exception as e:
                 self._send_json({"ok": False, "error": str(e)}, 500)

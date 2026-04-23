@@ -468,68 +468,78 @@ def build_analyst_dashboard(analyst: dict, output_path: str = "analyst_dashboard
     <div class="result-card" id="result-card"></div>
   </div>
 
-  <!-- Tab 3: Portfolio Builder -->
+  <!-- Tab 3: Portfolio Builder (Sprint Mode) -->
   <div id="tab-portfolio" class="tab-panel">
-    <h2>Portfolio Builder <span class="badge badge-ml">$30/Week DCA &bull; Started Apr 23 2026</span></h2>
+    <h2>Portfolio Builder <span class="badge badge-ml">2-Month Max Return</span>
+        <span class="badge badge-analyst">$30/Week &bull; Started Apr 23 2026</span></h2>
 
     <div id="pf-loading" style="color:#8B949E;font-size:0.85rem;padding:24px 0">
-      Loading market data...
+      Scanning market for best opportunities...
     </div>
     <div id="pf-error" class="lookup-error"></div>
 
-    <!-- Regime + indicators -->
-    <div id="pf-regime-card" style="display:none">
-      <div id="pf-regime-badge" style="display:inline-block;padding:8px 18px;border-radius:6px;
-           font-size:0.8rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:16px"></div>
-      <p id="pf-regime-desc" style="font-size:0.82rem;color:#8B949E;max-width:720px;line-height:1.7;margin-bottom:20px"></p>
+    <div id="pf-sprint-card" style="display:none">
 
+      <!-- Summary stat strip -->
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:28px">
-        <div class="metric-card"><div class="label">SPY Price</div><div class="value" id="pf-spy-price">—</div></div>
-        <div class="metric-card"><div class="label">200-Day MA</div><div class="value" id="pf-spy-ma200">—</div></div>
-        <div class="metric-card"><div class="label">50-Day MA</div><div class="value" id="pf-spy-ma50">—</div></div>
-        <div class="metric-card"><div class="label">20-Day Vol (Ann.)</div><div class="value" id="pf-vol">—</div></div>
-        <div class="metric-card"><div class="label">60-Day Momentum</div><div class="value" id="pf-mom">—</div></div>
-        <div class="metric-card"><div class="label">MA Trend</div><div class="value" id="pf-cross">—</div></div>
-        <div class="metric-card"><div class="label">Total Deposited</div><div class="value" id="pf-deposited">—</div></div>
-        <div class="metric-card"><div class="label">Weeks Running</div><div class="value" id="pf-weeks">—</div></div>
+        <div class="metric-card"><div class="label">Total Capital</div>
+          <div class="value" id="sp-total" style="color:#58A6FF">—</div></div>
+        <div class="metric-card"><div class="label">End Date</div>
+          <div class="value" id="sp-end">—</div></div>
+        <div class="metric-card"><div class="label">Exp. Ann. Return</div>
+          <div class="value" id="sp-ret">—</div></div>
+        <div class="metric-card"><div class="label">Ann. Volatility</div>
+          <div class="value" id="sp-vol">—</div></div>
+        <div class="metric-card"><div class="label">Median 8-Wk Value</div>
+          <div class="value" id="sp-med" style="color:#3FB950">—</div></div>
+        <div class="metric-card"><div class="label">Best Case (p90)</div>
+          <div class="value" id="sp-p90" style="color:#3FB950">—</div></div>
+        <div class="metric-card"><div class="label">Worst Case (p10)</div>
+          <div class="value" id="sp-p10" style="color:#F85149">—</div></div>
       </div>
 
-      <!-- This week's buy list -->
+      <!-- Top picks -->
       <div style="font-size:0.72rem;color:#8B949E;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px">
-        This Week — Buy List
+        Top Picks — Concentrated Sprint Allocation
       </div>
-      <div class="table-container" style="margin-bottom:28px">
-        <table class="stats-table" id="pf-buy-table">
+      <div class="table-container" style="margin-bottom:8px">
+        <table class="stats-table">
           <thead><tr>
-            <th>Ticker</th><th>Name</th><th>Weight</th>
-            <th>$ This Week</th><th>Price</th><th>Shares</th><th>Signal</th>
+            <th>Rank</th><th>Ticker</th><th>Name</th><th>Score</th>
+            <th>Weight</th><th>$ Deploy</th><th>Price</th><th>Shares</th>
+            <th>21d Return</th><th>63d Return</th><th>Vol (Ann)</th><th>RSI</th><th>Analyst</th>
           </tr></thead>
-          <tbody id="pf-buy-body"></tbody>
+          <tbody id="sp-pick-body"></tbody>
         </table>
       </div>
+      <p style="font-size:0.72rem;color:#8B949E;margin-bottom:28px">
+        Score = momentum (50%) + analyst signal (25%) + RSI position (15%) + vol quality (10%).
+        Top 5 tickers from universe: NVDA, AMD, META, PLTR, TSLA, MSFT, GOOGL, AMZN, AAPL, CRM.
+      </p>
 
       <!-- Allocation bars -->
       <div style="font-size:0.72rem;color:#8B949E;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px">
         Allocation
       </div>
-      <div id="pf-alloc-bars" style="margin-bottom:28px;max-width:600px"></div>
+      <div id="sp-alloc-bars" style="margin-bottom:28px;max-width:560px"></div>
 
-      <!-- 10-year projection chart -->
+      <!-- 8-week projection chart -->
       <div style="font-size:0.72rem;color:#8B949E;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px">
-        10-Year Growth Projection (Monte Carlo, 500 simulations)
+        8-Week Return Projection (Monte Carlo &bull; 500 simulations)
       </div>
-      <div id="pf-projection-chart" style="width:100%;height:380px;margin-bottom:28px"></div>
+      <div id="sp-chart" style="width:100%;height:360px;margin-bottom:28px"></div>
 
-      <!-- Milestone table -->
+      <!-- Full ranking table -->
       <div style="font-size:0.72rem;color:#8B949E;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px">
-        Portfolio Milestones (Median Estimate)
+        Full Ranking — All Candidates
       </div>
       <div class="table-container">
-        <table class="stats-table" id="pf-milestone-table">
+        <table class="stats-table">
           <thead><tr>
-            <th>Target</th><th>Est. Date</th><th>Years</th><th>Total Deposited</th>
+            <th>Ticker</th><th>Score</th><th>21d Ret</th><th>63d Ret</th>
+            <th>Vol</th><th>RSI</th><th>Analyst</th><th>Selected</th>
           </tr></thead>
-          <tbody id="pf-milestone-body"></tbody>
+          <tbody id="sp-rank-body"></tbody>
         </table>
       </div>
     </div>
@@ -842,169 +852,150 @@ def build_analyst_dashboard(analyst: dict, output_path: str = "analyst_dashboard
         </div>`).join('');
     }}
 
-    /* ── Portfolio Builder ── */
-    let _pfLoaded = false;
+    /* ── Portfolio Builder (Sprint Mode) ── */
+    let _spLoaded = false;
 
     async function loadPortfolio() {{
-      if (_pfLoaded) return;
+      if (_spLoaded) return;
       const errEl  = document.getElementById('pf-error');
       const loadEl = document.getElementById('pf-loading');
-      const card   = document.getElementById('pf-regime-card');
+      const card   = document.getElementById('pf-sprint-card');
       errEl.style.display  = 'none';
       loadEl.style.display = 'block';
       card.style.display   = 'none';
 
       try {{
-        const resp = await fetch('http://localhost:8050/api/portfolio?deposit=30');
+        const resp = await fetch('http://localhost:8050/api/sprint?deposit=30&weeks=8');
         if (!resp.ok) throw new Error(`Server error ${{resp.status}}`);
         const d = await resp.json();
         if (!d.ok) throw new Error(d.error || 'Unknown error');
-        renderPortfolio(d);
-        _pfLoaded = true;
+        renderSprint(d);
+        _spLoaded = true;
       }} catch(e) {{
         const isConn = e.message.includes('fetch') || e.message.includes('Failed');
         errEl.innerHTML = isConn
-          ? `<strong>Server not running.</strong> In your terminal: <code>python serve.py</code> then open <a href="http://localhost:8050" style="color:#79C0FF">http://localhost:8050</a>`
-          : `Portfolio load error: ${{e.message}}`;
+          ? `<strong>Server not running.</strong> In terminal: <code>python serve.py</code> then open <a href="http://localhost:8050" style="color:#79C0FF">http://localhost:8050</a>`
+          : `Error: ${{e.message}}`;
         errEl.style.display = 'block';
       }} finally {{
         loadEl.style.display = 'none';
       }}
     }}
 
-    function renderPortfolio(d) {{
-      const card = document.getElementById('pf-regime-card');
+    function renderSprint(d) {{
+      const proj = d.projection;
+      const dep  = d.deposit_total;
+      const fmtD = v => '$' + v.toLocaleString(undefined, {{minimumFractionDigits:2, maximumFractionDigits:2}});
+      const fmtP = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+      const gainColor = v => v >= 0 ? '#3FB950' : '#F85149';
 
-      /* ── Regime badge ── */
-      const badge = document.getElementById('pf-regime-badge');
-      badge.textContent = d.regime_label;
-      badge.style.background = d.regime_color + '22';
-      badge.style.color       = d.regime_color;
-      badge.style.border      = `1px solid ${{d.regime_color}}55`;
-      document.getElementById('pf-regime-desc').textContent = d.regime_desc;
+      /* ── Stat strip ── */
+      document.getElementById('sp-total').textContent = fmtD(dep);
+      document.getElementById('sp-end').textContent   = new Date(d.end_date)
+        .toLocaleDateString('en-US', {{month:'short', day:'numeric', year:'numeric'}});
+      const retEl = document.getElementById('sp-ret');
+      retEl.textContent = fmtP(d.port_ret_ann);
+      retEl.style.color = gainColor(d.port_ret_ann);
+      document.getElementById('sp-vol').textContent = d.port_vol_ann + '%';
 
-      /* ── Indicators ── */
-      const ind = d.indicators;
-      const fmt = (v, pre='$') => v != null ? `${{pre}}${{v.toLocaleString(undefined, {{minimumFractionDigits:2, maximumFractionDigits:2}})}}` : '—';
-      document.getElementById('pf-spy-price').textContent = fmt(ind.spy_price);
-      document.getElementById('pf-spy-ma200').textContent = fmt(ind.spy_ma200);
-      document.getElementById('pf-spy-ma50').textContent  = fmt(ind.spy_ma50);
-      document.getElementById('pf-vol').textContent  = ind.vol_20d  != null ? `${{ind.vol_20d}}%` : '—';
-      document.getElementById('pf-mom').textContent  = ind.mom_60d  != null ? `${{ind.mom_60d >= 0 ? '+' : ''}}${{ind.mom_60d}}%` : '—';
-      document.getElementById('pf-cross').innerHTML  = ind.golden_cross
-        ? '<span style="color:#3FB950">Golden Cross</span>'
-        : '<span style="color:#F85149">Death Cross</span>';
-      document.getElementById('pf-deposited').textContent = `$${{d.total_deposited.toFixed(2)}}`;
-      document.getElementById('pf-weeks').textContent     = d.weeks_running;
+      const medGain = (proj.final_median / dep - 1) * 100;
+      const p90Gain = (proj.final_p90    / dep - 1) * 100;
+      const p10Gain = (proj.final_p10    / dep - 1) * 100;
+      document.getElementById('sp-med').textContent =
+        `${{fmtD(proj.final_median)}} (${{fmtP(medGain)}})`;
+      document.getElementById('sp-p90').textContent =
+        `${{fmtD(proj.final_p90)}} (${{fmtP(p90Gain)}})`;
+      document.getElementById('sp-p10').textContent =
+        `${{fmtD(proj.final_p10)}} (${{fmtP(p10Gain)}})`;
 
-      /* ── Buy table ── */
-      const ETF_COLORS = {{'QQQ':'#58A6FF','SPY':'#79C0FF','GLD':'#F0C239','TLT':'#A371F7'}};
-      const tbody = document.getElementById('pf-buy-body');
-      tbody.innerHTML = d.allocation.map(row => {{
-        const col = ETF_COLORS[row.ticker] || (row.is_etf ? '#79C0FF' : d.regime_color);
+      /* ── Pick table ── */
+      const RANK_COLORS = ['#F0C239','#8B949E','#CD7F32','#79C0FF','#79C0FF'];
+      const pickBody = document.getElementById('sp-pick-body');
+      pickBody.innerHTML = d.allocation.map((row, i) => {{
+        const rc = RANK_COLORS[i] || '#79C0FF';
+        const mc = gainColor(row.ret_21d);
+        const m6c = gainColor(row.ret_63d);
         return `<tr>
-          <td style="font-weight:700;color:${{col}}">${{row.ticker}}</td>
-          <td style="color:#8B949E;font-size:0.78rem">${{row.name}}</td>
-          <td>${{row.weight}}%</td>
-          <td style="color:#3FB950;font-weight:600">$${{row.dollar.toFixed(2)}}</td>
-          <td>${{row.price != null ? '$${{row.price.toFixed(2)}}' : '—'}}</td>
-          <td style="font-size:0.78rem">${{row.shares != null ? row.shares.toFixed(4) : '—'}}</td>
-          <td style="font-size:0.75rem;color:#8B949E">${{row.reason}}</td>
+          <td style="font-weight:700;color:${{rc}}">#${{row.rank}}</td>
+          <td style="font-weight:700;color:#E6EDF3">${{row.ticker}}</td>
+          <td style="color:#8B949E;font-size:0.75rem">${{row.name}}</td>
+          <td><span style="background:#58A6FF22;color:#58A6FF;padding:2px 8px;border-radius:4px;font-weight:700">${{row.score}}</span></td>
+          <td style="font-weight:600">${{row.weight}}%</td>
+          <td style="color:#3FB950;font-weight:700">$${{row.dollar.toFixed(2)}}</td>
+          <td>$${{row.price.toFixed(2)}}</td>
+          <td style="font-size:0.78rem">${{row.shares != null ? row.shares : '—'}}</td>
+          <td style="color:${{mc}};font-weight:600">${{fmtP(row.ret_21d)}}</td>
+          <td style="color:${{m6c}};font-weight:600">${{fmtP(row.ret_63d)}}</td>
+          <td>${{row.vol_20d}}%</td>
+          <td style="color:${{row.rsi_14 > 70 ? '#F28C28' : row.rsi_14 < 40 ? '#79C0FF' : '#E6EDF3'}}">${{row.rsi_14}}</td>
+          <td><span style="background:${{row.analyst_score>=70?'#3FB95022':row.analyst_score<40?'#F8514922':'#8B949E22'}};
+               color:${{row.analyst_score>=70?'#3FB950':row.analyst_score<40?'#F85149':'#8B949E'}};
+               padding:2px 7px;border-radius:4px;font-size:0.75rem">${{row.analyst_score.toFixed(0)}}</span></td>
         </tr>`;
       }}).join('');
 
       /* ── Allocation bars ── */
-      const bars = document.getElementById('pf-alloc-bars');
-      bars.innerHTML = d.allocation.map(row => {{
-        const col = ETF_COLORS[row.ticker] || d.regime_color;
-        return `<div style="margin-bottom:10px">
+      const barColors = ['#F0C239','#58A6FF','#A371F7','#3FB950','#F28C28'];
+      document.getElementById('sp-alloc-bars').innerHTML = d.allocation.map((row, i) => `
+        <div style="margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:4px">
-            <span style="color:#E6EDF3;font-weight:600">${{row.ticker}}</span>
+            <span style="color:#E6EDF3;font-weight:700">${{row.ticker}}</span>
             <span style="color:#8B949E">${{row.weight}}%</span>
           </div>
-          <div style="background:#21262D;border-radius:4px;height:8px">
-            <div style="background:${{col}};width:${{row.weight}}%;height:8px;border-radius:4px;transition:width 0.4s"></div>
+          <div style="background:#21262D;border-radius:4px;height:10px">
+            <div style="background:${{barColors[i]||'#58A6FF'}};width:${{row.weight}}%;height:10px;border-radius:4px"></div>
           </div>
-        </div>`;
-      }}).join('');
+        </div>`).join('');
 
-      /* ── Projection chart ── */
-      const proj  = d.projection;
-      const every = 26; // sample every 26 weeks for cleaner chart
-      const idx   = proj.dates.map((_,i) => i).filter(i => i % every === 0 || i === proj.dates.length-1);
-      const dates = idx.map(i => proj.dates[i]);
+      /* ── 8-week projection chart ── */
       const traces = [
-        {{
-          x: dates, y: idx.map(i => proj.p90[i]),
-          name: 'Best (p90)', line: {{color:'#3FB950', dash:'dot', width:1}},
-          mode: 'lines', fill: 'none', showlegend: true
-        }},
-        {{
-          x: dates, y: idx.map(i => proj.p75[i]),
-          name: 'Good (p75)', line: {{color:'#3FB950', width:2}},
-          fill: 'tonexty', fillcolor: 'rgba(63,185,80,0.06)',
-          mode: 'lines', showlegend: true
-        }},
-        {{
-          x: dates, y: idx.map(i => proj.median[i]),
-          name: 'Median', line: {{color:'#58A6FF', width:3}},
-          fill: 'tonexty', fillcolor: 'rgba(63,185,80,0.06)',
-          mode: 'lines', showlegend: true
-        }},
-        {{
-          x: dates, y: idx.map(i => proj.p25[i]),
-          name: 'Cautious (p25)', line: {{color:'#F28C28', width:2}},
-          fill: 'tonexty', fillcolor: 'rgba(88,166,255,0.06)',
-          mode: 'lines', showlegend: true
-        }},
-        {{
-          x: dates, y: idx.map(i => proj.p10[i]),
-          name: 'Worst (p10)', line: {{color:'#F85149', dash:'dot', width:1}},
-          fill: 'tonexty', fillcolor: 'rgba(248,81,73,0.04)',
-          mode: 'lines', showlegend: true
-        }},
-        {{
-          x: dates, y: idx.map(i => proj.total_deposited[i]),
-          name: 'Total Deposited', line: {{color:'#8B949E', dash:'dash', width:1.5}},
-          mode: 'lines', showlegend: true
-        }},
+        {{x:proj.dates, y:proj.p90,    name:'Best (p90)',
+          line:{{color:'#3FB950',dash:'dot',width:1}}, mode:'lines', fill:'none'}},
+        {{x:proj.dates, y:proj.p75,    name:'Good (p75)',
+          line:{{color:'#3FB950',width:2}}, mode:'lines',
+          fill:'tonexty', fillcolor:'rgba(63,185,80,0.07)'}},
+        {{x:proj.dates, y:proj.median, name:'Median',
+          line:{{color:'#58A6FF',width:3}}, mode:'lines',
+          fill:'tonexty', fillcolor:'rgba(63,185,80,0.07)'}},
+        {{x:proj.dates, y:proj.p25,    name:'Cautious (p25)',
+          line:{{color:'#F28C28',width:2}}, mode:'lines',
+          fill:'tonexty', fillcolor:'rgba(88,166,255,0.05)'}},
+        {{x:proj.dates, y:proj.p10,    name:'Worst (p10)',
+          line:{{color:'#F85149',dash:'dot',width:1}}, mode:'lines',
+          fill:'tonexty', fillcolor:'rgba(248,81,73,0.04)'}},
+        {{x:[proj.dates[0], proj.dates[proj.dates.length-1]],
+          y:[dep, dep], name:'Deposited',
+          line:{{color:'#8B949E',dash:'dash',width:1.5}}, mode:'lines'}},
       ];
-      const layout = {{
-        paper_bgcolor: '#0D1117', plot_bgcolor: '#0D1117',
-        font: {{color: '#8B949E', family: "'SF Mono', monospace", size: 11}},
-        xaxis: {{gridcolor: '#21262D', zeroline: false}},
-        yaxis: {{gridcolor: '#21262D', zeroline: false, tickprefix: '$', tickformat: ',.0f'}},
-        legend: {{bgcolor: '#161B22', bordercolor: '#21262D', borderwidth: 1,
-                  font: {{size: 10}}, orientation: 'h', y: -0.15}},
-        margin: {{t: 20, r: 20, b: 60, l: 70}},
-        hovermode: 'x unified',
-        shapes: [{{
-          type: 'line', x0: d.today, x1: d.today,
-          y0: 0, y1: 1, yref: 'paper',
-          line: {{color: '#8B949E', dash: 'dot', width: 1}}
-        }}],
-        annotations: [{{
-          x: d.today, y: 1, yref: 'paper',
-          text: 'Today', showarrow: false,
-          font: {{color: '#8B949E', size: 10}}, xanchor: 'left'
-        }}]
-      }};
-      Plotly.newPlot('pf-projection-chart', traces, layout,
-                     {{responsive: true, displayModeBar: false}});
+      Plotly.newPlot('sp-chart', traces, {{
+        paper_bgcolor:'#0D1117', plot_bgcolor:'#0D1117',
+        font:{{color:'#8B949E', family:"'SF Mono',monospace", size:11}},
+        xaxis:{{gridcolor:'#21262D', zeroline:false}},
+        yaxis:{{gridcolor:'#21262D', zeroline:false, tickprefix:'$', tickformat:',.2f'}},
+        legend:{{bgcolor:'#161B22', bordercolor:'#21262D', borderwidth:1,
+                 font:{{size:10}}, orientation:'h', y:-0.18}},
+        margin:{{t:16, r:20, b:65, l:75}},
+        hovermode:'x unified',
+      }}, {{responsive:true, displayModeBar:false}});
 
-      /* ── Milestones ── */
-      const mtbody = document.getElementById('pf-milestone-body');
-      mtbody.innerHTML = d.milestones.map(m => {{
-        const reached = m.date != null;
-        return `<tr style="${{reached ? '' : 'opacity:0.4'}}">
-          <td style="font-weight:700;color:#58A6FF">${{m.target}}</td>
-          <td>${{m.date ? new Date(m.date).toLocaleDateString('en-US',{{month:'short',day:'numeric',year:'numeric'}}) : 'N/A'}}</td>
-          <td>${{m.years != null ? m.years + ' yrs' : '—'}}</td>
-          <td style="color:#8B949E">${{m.deposited != null ? '$${{m.deposited.toLocaleString()}}' : '—'}}</td>
+      /* ── Full ranking table ── */
+      document.getElementById('sp-rank-body').innerHTML = d.ranked_all.map(row => {{
+        const sc = row.selected;
+        const mc = gainColor(row.ret_21d);
+        return `<tr style="${{sc ? 'background:#58A6FF0A' : 'opacity:0.55'}}">
+          <td style="font-weight:${{sc?'700':'400'}};color:${{sc?'#E6EDF3':'#8B949E'}}">${{row.ticker}}</td>
+          <td><span style="background:${{sc?'#58A6FF22':'#21262D'}};color:${{sc?'#58A6FF':'#8B949E'}};
+               padding:2px 8px;border-radius:4px;font-weight:700">${{row.score}}</span></td>
+          <td style="color:${{mc}}">${{fmtP(row.ret_21d)}}</td>
+          <td style="color:${{gainColor(row.ret_63d)}}">${{fmtP(row.ret_63d)}}</td>
+          <td>${{row.vol_20d}}%</td>
+          <td style="color:${{row.rsi_14>70?'#F28C28':row.rsi_14<40?'#79C0FF':'#8B949E'}}">${{row.rsi_14}}</td>
+          <td>${{row.analyst}}</td>
+          <td>${{sc ? '<span style="color:#3FB950;font-weight:700">Selected</span>' : '—'}}</td>
         </tr>`;
       }}).join('');
 
-      card.style.display = 'block';
+      document.getElementById('pf-sprint-card').style.display = 'block';
     }}
   </script>
 
